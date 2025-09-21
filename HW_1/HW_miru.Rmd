@@ -1,0 +1,65 @@
+
+---
+title: "HW_Miru"
+author: "Miruthu"
+date: "2025-09-21"
+output: html_document
+---
+
+```{r}
+
+Typical_Employee_Survey_Data <- read.csv("Typical_Employee_Survey_Data.csv")
+job <- data.frame(Typical_Employee_Survey_Data)
+
+dim(job)
+col(job)
+ncol(job)
+nrow(job)
+colnames(job)
+colnames(job[,sapply(job,is.numeric)])
+
+#1. Print out the 5-point summary and boxplot (numerical columns) for each column (20 points)
+
+num_cols <- names(job)[sapply(job, is.numeric)]
+
+for (nm in num_cols) {
+  cat("\n### Five-number summary for:", nm, "\n")
+  print(stats::fivenum(job[[nm]], na.rm = TRUE))
+}
+
+for (nm in num_cols) {
+  boxplot(job[[nm]])
+}
+
+
+#2. Convert the columns that need to be converted to Factors (20 points)
+
+job$gender <- as.factor(job$gender)
+job$JobSatisfaction <- as.factor(job$JobSatisfaction)
+job$impJobCharacterstics <- as.factor(job$impJobCharacterstics)
+job$DecisionAuthority <- as.factor(job$DecisionAuthority)
+job$BudgetDecisions <- as.factor(job$BudgetDecisions)
+job$Proud <- as.factor(job$Proud)
+job$stay <- as.factor(job$stay)
+job$relations <- as.factor(job$relations)
+
+#3. Plot the right visual for each column (20 points)
+hist(job$age, main="Histogram: age", xlab="age")
+hist(job$YearsInJob, main="Histogram: YearsInJob", xlab="YearsInJob")
+hist(job$Promotions, main="Histogram: Promotions", xlab="Promotions")
+
+barplot(table(job$gender))
+barplot(table(job$JobSatisfaction))
+barplot(table(job$impJobCharacterstics))
+barplot(table(job$DecisionAuthority))
+barplot(table(job$BudgetDecisions))
+barplot(table(job$Proud))
+barplot(table(job$stay))
+barplot(table(job$relations))
+
+
+#4. Plot scatter plots to show few relationships (20 points)
+plot(job$age, job$YearsInJob)
+plot(job$age, job$Promotions)
+plot(job$YearsInJob, job$Promotions)
+```
