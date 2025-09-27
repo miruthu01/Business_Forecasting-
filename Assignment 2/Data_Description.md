@@ -16,11 +16,19 @@
 | `Date` | Date (YYYY-MM-DD) | Full date of the transaction. |
 | `Time` | Time (HH:MM:SS.sss) | Exact time when the transaction was logged. |
 
+## Data Collection Methodology
+
+The dataset represents **coffee shop sales transactions**. Each row is a transaction recorded by the shop’s point-of-sale (POS) system.
+
+- **Collected by:** Coffee shop POS  
+- **Frequency:** Each sale is logged in real time 
+- **Coverage:** Transactions from multiple months in 2024
+- **Fields:** Include payment type, product sold, timestamp, and amount spent  
 
 *The dataset was originally published on Kaggle and downloaded on Sep 2025. The original uploader compiled sales data from a real coffee shop POS system.*
 
 
-## 💡 Why This Dataset Intrigues Me
+## Why This Dataset Intrigues Me
 
-### I’m a self-confessed coffee addict ☕ — usually found at Starbucks with a latte in hand. Coffee sales change with the seasons (pumpkin spice in fall, iced drinks in summer), which makes this dataset fun to explore.
+### I’m a self-confessed coffee addict — usually found at Starbucks with a latte in hand. Coffee sales change with the seasons (pumpkin spice in fall, iced drinks in summer), which makes this dataset fun to explore.
 ---
