@@ -1,0 +1,184 @@
+---
+title: "Coffee Sales Forecast"
+author: "Miruthula Vaishnavy S "
+Date: 08/10/2025
+output: 
+---
+
+# Assignment 4
+**Questions Covered:**
+1. Try the different models we ran in class on your dataset (2 points)  
+2. Understand and explain your model output (4 points)  
+3. Plot the time series and different model forecasts in one chart (2 points)  
+4. Pick an accuracy measure, compare your models, and state the best model (2 points)
+
+Dataset used: `Coffe_sales-2.csv`
+
+
+# Load and Prepare the Data
+turn daily transactions into one total value per day (daily sales).
+
+```{r}
+
+library(fpp2)
+library(TTR)
+
+dat <- read.csv("Coffe_sales-2.csv", stringsAsFactors = FALSE)
+
+# Minimal cleaning: Date to Date type, sum by day, fill gaps with 0
+dat$Date <- as.Date(dat$Date)
+daily <- aggregate(money ~ Date, data = dat, FUN = sum)
+daily <- daily[order(daily$Date), ]
+
+# fill missing calendar days so the series is regular
+all_days <- data.frame(Date = seq(min(daily$Date), max(daily$Date), by = "day"))
+daily <- merge(all_days, daily, by = "Date", all.x = TRUE)
+daily$money[is.na(daily$money)] <- 0
+
+
+y <- ts(daily$money, frequency = 7)
+y[is.na(y)] <- 0
+plot(y)
+acf(y)
+
+h <- 15
+
+plot(y, main= "Coffee Sales: Daily Time Series")
+
+```
+# Apply Forecasting Models
+
+```{r}
+# Mean 
+mean_forecast <- meanf(y, h)
+
+# Naive
+naive_forecast <- naive(y, h)
+
+attributes(naive_forecast)
+# Random Walk 
+rwf_forecast    <- rwf(y, h, drift = TRUE)
+
+# Seasonal Naive
+snaive_forecast <- snaive(y, h)
+
+# Moving Averages 
+
+MA5  <- ma(y, order = 5)
+MA9 <- ma(y,order=9)
+
+# ETS 
+ets_forecast <- ets(y)
+
+# HoltWinters
+HW_forecast <- HoltWinters(y)
+
+# Forecasts from ETS and HoltWinters
+forecast_ets <- forecast(ets_forecast, h = h)
+forecast_hw  <- forecast(HW_forecast,  h = h)
+ ses_forecast      <- ses(y, h = h) 
+
+```
+# Plot All Forecasts Together
+```{r}
+plot(mean_forecast,main = "Coffee Sales Forecasts")
+lines(naive_forecast$mean,        col = "red")
+lines(rwf_forecast$mean,    col = "green", lty = 2)
+lines(snaive_forecast$mean,       col = "black")
+lines(forecast_ets$mean,          col = "purple")
+lines(forecast_hw $mean,           col = "orange")
+legend("topleft",
+       c("meanf","naive","rwf","snaive","ETS","HoltWinters"),
+       col = c("blue","red","green","black","purple","orange"),
+       lty = c(1,1,1,2,1,1,1), bty = "n", cex = 0.7)
+
+```
+
+```{r}
+
+# (3) Moving averages on history
+plot(y, main = "Moving Averages")
+lines(MA5, col = "pink")
+lines(MA9, col = "blue")
+legend("topleft", c("MA(5)","MA(9)"), col = c("pink","blue"))
+
+# (4) ETS vs HoltWinters forecasts
+plot(forecast_ets, main = "ETS Forecast")
+lines(forecast_hw $mean, col = "orange")
+legend("topleft", c("ETS","HoltWinters"), col = c("blue","orange"))
+
+
+
+
+```
+
+```{r}
+attributes(naive_forecast)
+ets_forecast$mse
+forecast_hw $SSE
+head(HW_forecast$fitted)
+
+```
+# Understand and Explain Your Model Output
+
+**Mean Forecast**
+The mean forecast takes the average of all past coffee sales and predicts this same value for all future periods.
+It gives a flat line because it assumes no trend or seasonality.
+
+**Naive Forecast**
+The naive model assumes that the next value equals the last observed value.
+It performs better than the mean forecast when data are stable, but it ignores trends and patterns.
+
+**Random Walk**
+Similar to the naive model but allows a random step (or “drift”) between observations.
+It slightly adjusts forecasts up or down but doesn’t capture weekly patterns.
+
+**Moving Average**
+The moving average smooths daily noise by taking the average of the past few days.
+It shows clearer sales trends and has the lowest RMSE, but it can’t predict future points—only smooth existing data.
+
+**Seasonal Naive**
+Repeats the last week’s pattern.
+Works well when sales follow a weekly cycle, like daily coffee sales that peak on weekdays.
+
+**SES (Simple Exponential Smoothing)**
+Gives more weight to recent observations.
+It smooths the series well but doesn’t handle trends or seasonality.
+
+**Holt’s Method**
+Adds a trend component to SES, allowing upward or downward movement.
+It performs better when the data show a steady trend.
+
+**Holt-Winters**
+Adds both trend and seasonality to Holt’s model.
+Captures the weekly pattern of coffee sales effectively and produces stable forecasts.
+
+**SSE (Simple Holt-Winters without trend/season)**
+A simpler version of Holt-Winters that adjusts only for level.
+Used for comparison to show the improvement gained by adding trend and seasonality.
+
+# Accuracy Comparison
+```{r}
+
+model_comparison <- rbind(
+  MeanForecast   = accuracy(mean_forecast),
+  Naive          = accuracy(naive_forecast),
+  RandomWalk     = accuracy(rwf_forecast),
+  MovingAverage  = accuracy(forecast(ma(y, order = 5), h = h)),
+  SeasonalNaive  = accuracy(snaive_forecast),
+  Holt           = accuracy(forecast_hw ),
+  SES           = accuracy(ses_forecast)
+)
+
+rownames(model_comparison) <- c("Mean Forecast", "Naive", "Random Walk",
+                                "Moving Average", "Seasonal Naive",
+                                "Holt", "SeS")
+
+# Display only the main accuracy measures (rounded to 3 decimals)
+round(model_comparison[, c("RMSE", "MAE", "MAPE", "MASE")], 3)
+```
+# Pick an Accuracy Measure and State the Best Model
+- Based on RMSE, the Moving Average gives the lowest error (37.666).
+- However, since it only smooths past data and cannot forecast future values, it’s not ideal for prediction.
+- The **Holt-Winters model** is the most practical forecasting model because it captures both trend and seasonality.
+- It provides stable and realistic predictions for future coffee sales.
