@@ -1,0 +1,247 @@
+---
+title: "Coffee Sales Forecast – Midterm (Bullet-by-Bullet Answers)"
+author: "Miruthula Vaishnavy S"
+date: 10/13/2025
+output:
+  pdf_document: default
+  html_document: default
+---
+
+# Import Data Used CHATGPT to Clean the Data
+
+```{r}
+library(forecast) 
+library(TTR)      
+library(tinytex)
+```
+
+```{r}
+# Read the provided CSV (expects columns: Date, money)
+dat <- read.csv("Coffe_sales-2.csv", stringsAsFactors = FALSE)
+dat$Date <- as.Date(dat$Date)
+
+# Build daily sequence and fill missing days with 0 (base R only)
+alldays <- data.frame(Date = seq(min(dat$Date), max(dat$Date), by = "day"))
+merged <- merge(alldays, dat[, c("Date","money")], by = "Date", all.x = TRUE)
+merged$money[is.na(merged$money)] <- 0
+
+# Aggregate to monthly totals (base R)
+ym <- format(merged$Date, "%Y-%m")
+monthly_sum <- tapply(merged$money, ym, sum, na.rm = TRUE)
+
+# Make monthly time series
+ym_names <- names(monthly_sum)
+start_year <- as.integer(substr(ym_names[1], 1, 4))
+start_month <- as.integer(substr(ym_names[1], 6, 7))
+y <- ts(as.numeric(monthly_sum), frequency = 12, start = c(start_year, start_month))
+
+# Forecast horizon
+h <- 12
+```
+
+# Plot and Inference
+
+## Time series plot
+```{r}
+plot(y, main = "Coffee Sales – Monthly Time Series", xlab = "Time", ylab = "Sales")
+```
+
+## Observations from the time series plot
+The monthly sales line (March 2024 → March 2025) shows ups/downs month to month and a visible level shift around late 2024
+- Repeating ups/downs across years suggest seasonality
+- Level changes are visible; short-term noise exists.  
+- No extreme outliers by eye (spikes would be visible in the plot).
+
+# Central Tendency
+
+## Min, Max, Mean, Median, 1st and 3rd Quartiles
+```{r}
+summary(as.numeric(y))
+quantile(as.numeric(y), c(0.25, 0.5, 0.75), na.rm = TRUE)
+```
+
+## Box plot
+```{r boxplot}
+boxplot(as.numeric(y), main = "Boxplot of Monthly Coffee Sales", ylab = "Sales")
+```
+
+## Observations from summary and box plot
+- Median represents the typical month.  
+- IQR (Q3–Q1) shows the middle spread.  
+- Points far from whiskers indicate potential outliers.
+
+
+
+## Which month is high and which is low? Why?
+- **High months:** Those with higher SeasonalIndex. 
+- **Low months:** Those with lower SeasonalIndex  
+- Reason High months may coincide with holidays or promotions; low months reflect off‑peak demand.
+
+# Naïve Method
+
+## Naïve model output
+```{r}
+fit_naive <- naive(y, h = h)
+fit_naive
+```
+
+##Naïve model output
+Forecast = repeat last observed month (flat line at the March-2025 value).
+
+
+## Residual analysis – plots
+```{r}
+res_naive <- residuals(fit_naive)
+
+
+plot(res_naive, main = "Residuals (Naïve)")
+hist(res_naive, main = "Histogram (Naïve Residuals)")
+plot(fitted(fit_naive), res_naive, main = "Fitted vs Residuals"); abline(h = 0, col = "red")
+plot(as.numeric(y), res_naive, main = "Actual vs Residuals"); abline(h = 0, col = "red")
+acf(na.omit(res_naive), main = "ACF of Residuals")
+plot(fit_naive$mean, type = "l", main = "Naïve Forecast (Next 12 Months)")
+
+```
+**Residual analysis**
+Residuals bounce around zero; some autocorrelation can remain because the method is simplistic.
+
+## Five accuracy measures
+```{r}
+acc_naive <- accuracy(fit_naive)
+acc_naive
+```
+
+## Forecast for next year (table + plot already shown)
+- The table is printed in the model output above; the plot shows the 12‑month forecast path.
+
+## Summary of Naïve method
+- Predicts the **last observed value** forward.  
+- Good **baseline** if residuals show autocorrelation, it may miss structure.
+
+# Simple Moving Averages
+
+## Time series with MA(3), MA(6), MA(9)
+```{r}
+plot(y, main = "Moving Averages Overlay", xlab = "Time", ylab = "Sales")
+ma3 <- ma(y, order = 3)
+ma6 <- ma(y, order = 6)
+ma9 <- ma(y, order = 9)
+lines(ma3, col = "red")
+lines(ma6, col = "blue")
+lines(ma9, col = "green")
+legend("topleft", legend = c("MA(3)","MA(6)","MA(9)"), col = c("red","blue","green"), lty = 1, bty = "n")
+```
+
+## (Bonus) Forecast of next 12 months using one MA
+```{r ma-forecast}
+# Simple bonus: extend last MA(6) as a flat forecast for illustration
+best_ma <- ma6
+last_ma <- tail(na.omit(best_ma), 1)
+ma_fc <- ts(rep(as.numeric(last_ma), h), frequency = 12, start = c(time(y)[length(y)] %/% 1, ((time(y)[length(y)] %% 1) * 12) + 1))
+plot(y, main = "MA-based Flat Forecast (Bonus)", xlab = "Time", ylab = "Sales")
+lines(ma_fc, col = "purple")
+legend("topleft", legend = c("Actual","MA-based Forecast"), col = c("black","purple"), lty = 1, bty = "n") #Used ChatGPT
+```
+
+## Observations as the order increases
+- Higher order **smooths more** but **reacts slower** to changes.
+
+# Simple Smoothing (SES)
+
+## SES model output
+```{r ses-fit}
+fit_ses <- ses(y, h = h)  # alpha auto-chosen
+fit_ses
+```
+
+
+## SES residual analysis – plots
+```{r}
+plot(res_ses, main = "Residuals (SES)")
+hist(res_ses, main = "Histogram (SES Residuals)")
+plot(fitted(fit_ses), res_ses, main = "Fitted vs Residuals"); abline(h = 0, col = "red")
+plot(as.numeric(y), res_ses, main = "Actual vs Residuals"); abline(h = 0, col = "red")
+acf(na.omit(res_ses), main = "ACF of Residuals")
+plot(fit_ses$mean, type = "l", main = "SES Forecast (Next 12 Months)")
+
+```
+
+## Five accuracy measures (SES)
+```{r}
+acc_ses <- accuracy(fit_ses)
+acc_ses
+```
+
+## Forecast for next year (table + plot already shown)
+- The SES forecast table is in the model output; the plot shows the 12 months ahead.
+
+## Summary of SES
+- Smooths noise with **alpha**; good for level changes without trend/season.
+
+# Holt-Winters
+
+## HW model output
+```{r}
+# Simplest: Holt's linear (no seasonality)
+hw_model <- HoltWinters(y, gamma = FALSE)
+fit_hw <- forecast(hw_model, h = h)
+hw_model
+```
+
+- Alpha: level smoothing; **Beta**: trend smoothing; **Gamma**: seasonal smoothing.  
+- Initial state: starting values for level, trend, season.  
+- **Sigma (proxy)**: typical error size from residuals.
+
+## HW residual analysis – plots
+```{r}
+
+plot(res_hw, main = "Residuals (Holt-Winters)")
+hist(res_hw, main = "Histogram (HW Residuals)")
+plot(fitted(fit_hw), res_hw, main = "Fitted vs Residuals"); abline(h = 0, col = "red")
+plot(as.numeric(y), res_hw, main = "Actual vs Residuals"); abline(h = 0, col = "red")
+acf(na.omit(res_hw), main = "ACF of Residuals")
+plot(fit_hw$mean, type = "l", main = "Holt-Winters Forecast (Next 12 Months)")
+
+```
+
+## Five accuracy measures (HW)
+```{r hw-accuracy}
+acc_hw <- accuracy(fit_hw)
+acc_hw
+```
+
+## Forecast for next year
+- HW forecast printed above plot shows the next 12 months with seasonality.
+
+## Summary of HW
+- Captures level, trend, and seasonality usually best when a clear seasonality exists.
+
+# Accuracy Summary
+
+## Table of all methods with accuracy measures
+```{r all-accuracy}
+compare <- rbind(
+  Naive = acc_naive[1, c("RMSE","MAE","MAPE","MASE")],
+  SES   = acc_ses[1, c("RMSE","MAE","MAPE","MASE")],
+  HW    = acc_hw[1,  c("RMSE","MAE","MAPE","MASE")]
+)
+round(compare, 3)
+```
+
+## Best and worst forecast methods by chosen measure
+```{r best-worst}
+rmse_vals <- compare[, "RMSE"]
+best_name  <- names(which.min(rmse_vals))
+worst_name <- names(which.max(rmse_vals))
+data.frame(ChosenMeasure = "RMSE", Best = best_name, Worst = worst_name)
+```
+- **Why RMSE?** 
+It penalizes large errors more than MAE.
+
+# Conclusion
+
+## Summary of the time series over the period
+- The coffee series shows seasonality and some variability month to month.
+
+## Outlook for next 1–2 years
+- Based on the best model above, expect forecasts to follow the estimated level/trend and seasonal pattern.
