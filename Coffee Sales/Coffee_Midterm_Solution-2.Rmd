@@ -1,0 +1,270 @@
+---
+title: "Midterm – Coffee Sales Forecast"
+author: "Miruthula Vaishnavy"
+output: html_document
+---
+
+
+
+```{r}
+library(forecast)
+library(fpp2)
+```
+
+```{r}
+
+# 1) Import & Monthly Series
+
+dat <- read.csv("Coffe_sales-2.csv")
+dat$Date <- as.Date(dat$Date)
+
+# Aggregate to daily -> ensure regularity -> then monthly sum
+daily <- aggregate(money ~ Date, data = dat, FUN = sum)
+daily <- daily[order(daily$Date), ]
+
+all_days <- data.frame(Date = seq(min(daily$Date), max(daily$Date), by = "day"))
+daily <- merge(all_days, daily, by = "Date", all.x = TRUE)
+daily$money[is.na(daily$money)] <- 0
+
+# Monthly sum with base R 
+ym <- paste(format(daily$Date, "%Y"), format(daily$Date, "%m"), sep = "-")
+monthly <- aggregate(daily$money, by = list(ym = ym), FUN = sum)
+monthly <- monthly[order(monthly$ym), ]
+
+start_year <- as.numeric(substr(monthly$ym[1], 1, 4))
+start_mon  <- as.numeric(substr(monthly$ym[1], 6, 7))
+y <- ts(monthly$x, frequency = 12, start = c(start_year, start_mon))
+
+# Show first values to confirm
+head(y)
+```
+
+### Introduction – Plot the time series and describe what you see
+
+```{r}
+plot(y, main = "Coffee Sales – Monthly Time Series", ylab = "Revenue ($)", xlab = "Time")
+```
+
+**Answer:**  
+The plot shows a seasonal pattern with a modest upward drift in later months. Peaks recur in the same parts of the year, and troughs cluster in a consistent month/season.
+
+---
+
+### Central Tendency – Summary & boxplot
+
+```{r}
+summary_stats <- summary(y)
+summary_stats
+boxplot(y, main = "Boxplot of Monthly Coffee Sales")
+```
+
+**Answer (observations):**  
+The median and mean are close, indicating a fairly stable center. The spread is moderate. Some high months appear (upper whisker/outliers), which align with seasonal peaks rather than random anomalies..
+
+---
+
+### Decomposition – Seasonal pattern, seasonal indices, and seasonally adjusted
+
+```{r}
+     
+## 4) Decomposition – 
+
+# If we don’t have 2 full years of monthly data, use HoltWinters to extract seasonal pattern
+HW_tmp <- HoltWinters(y)
+
+plot(y, main = "Actual vs Seasonally Adjusted")
+lines(seasadj_series, col = "red")
+legend("topleft", legend = c("Actual", "Seasonally Adjusted"),
+       col = c("black","red"), lty = 1, bty = "n")
+
+
+```
+
+```{r}
+# Overlay Actual vs Seasonally Adjusted (base plotting)
+plot(y, mam)
+lines(seasadj_series, col = "red")
+legend("topleft", legend = c("Actual", "Seasonally Adjusted"), col = c("black","red"), lty = 1, bty = "n")
+```
+
+**Answer:**  
+Seasonality is strong and regular. The seasonal indices (si_named above) show which months are above or below average. The seasonally adjusted series removes the repeating pattern and reveals the underlying level/trend more clearly.
+---
+
+## Naïve Method
+
+### Output – show the forecast for 12 months
+
+```{r}
+naive_fit <- naive(y, h = 12)
+plot(naive_fit, main = "Naive Forecast (Next 12 Months)")
+acc_naive <- accuracy(naive_fit)
+acc_naive
+```
+
+### Residual Analysis – plots and interpretation
+
+```{r}
+res_naive <- residuals(naive_fit)
+
+plot(res_naive, main = "Residuals (Naive)")
+hist(res_naive, main = "Histogram of Residuals (Naive)")
+plot(fitted(naive_fit), res_naive, main = "Fitted vs Residuals (Naive)")
+abline(h = 0, col = "red")
+plot(y, res_naive, main = "Actual vs Residuals (Naive)")
+abline(h = 0, col = "red")
+res_naive <- residuals(naive_fit)
+res_naive <- na.omit(res_naive)
+acf(res_naive, main = "ACF of Residuals (Naive)")
+```
+
+**Answer:**  
+The Naïve forecast equals the last observed value for all future periods, so it ignores trend/seasonality. Residuals show seasonal autocorrelation, meaning important structure is not captured.
+
+```{r}
+res_hw <- residuals(HW_forecast)
+res_hw <- na.omit(res_hw)
+acf(res_hw, main = "ACF of Residuals (HW)")
+```
+---
+
+## Simple Moving Averages (SMA)
+
+### Show MA overlays and a simple MA forecast
+
+```{r}
+plot(y, main = "Simple Moving Averages Overlay")
+lines(ma(y, order = 3), col = "red")
+lines(ma(y, order = 6), col = "blue")
+lines(ma(y, order = 9), col = "green")
+legend("topleft",
+       legend = c("Original","MA(3)","MA(6)","MA(9)"),
+       col = c("black","red","blue","green"), lty = 1, bty = "n")
+
+ma3_forecast <- forecast(ma(y, order = 3), h = 12)
+plot(ma3_forecast, main = "MA(3) Forecast")
+acc_ma3 <- accuracy(ma3_forecast)
+acc_ma3
+```
+
+**Answer:**  
+Larger windows :
+MA(9)) are smoother but lag more; smaller windows, MA(3)) react faster. SMA reduces random noise but does not explicitly model the seasonal cycle, so seasonal peaks/dips remain.
+---
+
+## Simple Exponential Smoothing (SES)
+
+### Fit with HoltWinters 
+
+```{r}
+SSE_Simple <- HoltWinters(y, beta = FALSE, gamma = FALSE)
+SSE_Simple$SSE
+SSE_Simple$alpha
+plot(SSE_Simple, main = "Simple Exponential Smoothing (HoltWinters)")
+
+SSE_forecast <- forecast(SSE_Simple, h = 12)
+plot(SSE_forecast, main = "SES Forecast (Next 12 Months)")
+acc_ses <- accuracy(SSE_forecast)
+acc_ses
+
+```
+
+### Residual Analysis for SES
+
+```{r}
+res_ses <- residuals(SSE_forecast)
+res_ses <- na.omit(res_ses)  
+
+plot(res_ses, main = "Residuals (SES)")
+hist(res_ses, main = "Histogram of Residuals (SES)")
+plot(fitted(SSE_forecast), res_ses, main = "Fitted vs Residuals (SES)", 
+     xlab = "Fitted", ylab = "Residual")
+abline(h = 0, col = "red")
+plot(y, res_ses, main = "Actual vs Residuals (SES)")
+abline(h = 0, col = "red")
+
+acf(res_ses, main = "ACF of Residuals (SES)")
+
+```
+
+**Answer:**  
+SES smooths the level (parameter alpha) only; with beta=FALSE and gamma=FALSE, it has no trend or seasonality terms. Residuals still show seasonal structure, so SES is insufficient for strongly seasonal monthly data.
+
+---
+
+## Holt–Winters 
+
+### Fit full Holt-Winters 
+
+```{r}
+# Holt–Winters Model (Additive)
+HW_model <- HoltWinters(y)   
+
+# Show smoothing parameters
+HW_model$alpha
+HW_model$beta
+HW_model$gamma
+
+# Plot the fitted model
+plot(HW_model, main = "Holt-Winters Fit")
+
+# Forecast next 12 months
+HW_forecast <- forecast(HW_model, h = 12)
+plot(HW_forecast, main = "Holt-Winters Forecast (Next 12 Months)")
+
+# Compute accuracy (basic)
+acc_hw <- accuracy(HW_forecast)
+acc_hw
+acc_hw <- accuracy(HW_model$fitted[,1], y)
+acc_hw
+
+```
+
+### Residual Analysis for Holt–Winters
+
+```{r}
+res_ses <- residuals(SSE_forecast)
+res_ses <- na.omit(res_ses)
+acf(res_ses, main = "ACF of Residuals (SES)")
+
+# Holt–Winters
+res_hw <- residuals(HW_forecast)
+res_hw <- na.omit(res_hw)
+acf(res_hw, main = "ACF of Residuals (HW)")
+```
+
+**Answer:**  
+Holt–Winters estimates α (level), β (trend), and γ (seasonality). With these components, residuals are closer to white noise and ACF shows weaker autocorrelation, indicating a better model fit for seasonal data.
+---
+
+## Accuracy Summary
+
+```{r}
+acc_table <- rbind(
+  Naive = acc_naive[1,],
+  MA3   = acc_ma3[1,],
+  SES   = acc_ses[1,],
+  HW    = acc_hw[1,]
+)
+
+acc_short <- round(acc_table[, c("RMSE","MAE","MAPE","MASE")], 3)
+acc_short
+best_by_rmse <- names(sort(acc_table[,"RMSE"]))[1]
+best_rmse <- round(min(acc_table[,"RMSE"]), 3)
+
+
+```
+
+**Answer:**  
+Using RMSE , the best model is the one with the smallest RMSE . On seasonal monthly retail data, Holt–Winters is typically strongest because it models level + trend + seasonality. MAPE/MAE should broadly agree with the RMSE ranking.
+
+---
+
+##Conclusion – What do the next 1–2 years look like?
+```{r}
+next2 <- as.numeric(HW_forecast$mean)
+highest_month <- which.max(next2)
+lowest_month  <- which.min(next2)
+highest_month; lowest_month
+```
+The next year shows repeatable seasonal peaks (forecast positions r top_pos) and a dip around position r low_pos. Assuming stable demand drivers, expect peaks in the same months each year and a slightly rising level if recent growth persists. Managers should increase inventory/staff ahead of high-demand months and use promotions to lift low months.
