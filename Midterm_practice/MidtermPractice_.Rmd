@@ -1,0 +1,271 @@
+---
+title: "Midterm Practice – Transit Forecast"
+author: "Miruthula Vaishnavy S"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+options(stringsAsFactors = FALSE)
+knitr::opts_chunk$set(cache = FALSE)
+```
+
+# Q1. Load the data as a monthly time series
+
+```{r}
+# Read and clean
+dat <- read.csv("TRANSIT.csv")
+names(dat) <- toupper(names(dat))
+date <- as.Date(dat$DATE)
+
+# Pick the numbers column (prefer TRANSIT if present)
+val_col <- if ("TRANSIT" %in% names(dat)) "TRANSIT" else setdiff(names(dat), "DATE")[1]
+y <- as.numeric(dat[[val_col]])
+
+# Make a monthly ts
+start_year  <- as.numeric(format(min(date), "%Y"))
+start_month <- as.numeric(format(min(date), "%m"))
+y_ts <- ts(y, frequency = 12, start = c(start_year, start_month))
+
+start(y_ts); end(y_ts); frequency(y_ts)
+```
+
+
+# Q2. Look at the series
+
+```{r}
+plot(y_ts, xlab="Time", ylab="Index", main="Transit Ridership (Monthly)")
+```
+
+**ANSWER:** The line repeats a yearly pattern (seasonality). There are clear drops and recoveries around major events.
+
+
+
+# Q3. Center and spread (just the basics)
+
+```{r}
+min_y <- min(y_ts, na.rm=TRUE)
+q1_y  <- quantile(y_ts, 0.25, na.rm=TRUE)
+med_y <- median(y_ts, na.rm=TRUE)
+mean_y<- mean(y_ts, na.rm=TRUE)
+q3_y  <- quantile(y_ts, 0.75, na.rm=TRUE)
+max_y <- max(y_ts, na.rm=TRUE)
+data.frame(Min=min_y, Q1=q1_y, Median=med_y, Mean=mean_y, Q3=q3_y, Max=max_y)
+```
+
+```{r}
+boxplot(y_ts, horizontal=TRUE, main="Boxplot", xlab="Index")
+```
+
+**ANSWER:** Typical months sit between Q1 and Q3. The lowest months are rare (outliers).
+
+
+
+# Q4. Decompose seasonality (additive and multiplicative)
+
+```{r}
+d_add <- decompose(y_ts, type="additive")
+d_mul <- decompose(y_ts, type="multiplicative")
+
+plot(d_add, xlab="Time"); title("Additive")
+plot(d_mul, xlab="Time"); title("Multiplicative")
+
+```
+
+```{r}
+# Which months are high/low (additive)
+add_idx <- round(d_add$figure,2)
+mul_idx <- round(d_mul$figure,3)
+data.frame(Month=month.abb, Additive=add_idx, Multiplicative=mul_idx)
+```
+**ANSWER:** trend, seasonal, and remainder pieces are separated clearly.
+some months are consistently high (e.g., fall); some consistently low.
+the size of the seasonal swing looks fairly stable → additive seasonality is reasonable.
+
+```{r}
+# Seasonally adjusted (simple, additive)
+sa <- y_ts - d_add$seasonal
+plot(y_ts, type="l", xlab="Time", ylab="Index", main="Actual vs Seasonally Adjusted")
+lines(sa, col="red")
+```
+
+**ANSWER:** Seasonality is strong. 
+If the size of the seasonal swing is about the same across years, additive is fine (that’s our case).
+
+
+
+# Q5. Naïve forecast (next 12 months)
+
+```{r}
+# Fitted (last value) and residuals
+naive_fitted <- c(NA, head(y_ts, -1))
+naive_resid  <- y_ts - naive_fitted
+
+# Forecast
+h <- 12
+naive_fc <- ts(rep(tail(y_ts,1), h), start=end(y_ts)+c(0,1), frequency=12)
+
+plot(y_ts, xlab="Time", ylab="Index", main="Naïve Forecast")
+lines(naive_fc, col="blue")
+```
+
+```{r}
+# Simple accuracy (no custom function)
+ok <- !is.na(naive_fitted)
+e  <- y_ts[ok] - naive_fitted[ok]
+ME   <- mean(e)
+RMSE <- sqrt(mean(e^2))
+MAE  <- mean(abs(e))
+okp  <- y_ts[ok] != 0
+MAPE <- if (any(okp)) mean(100*abs(e[okp])/abs(y_ts[ok][okp])) else NA
+data.frame(ME=ME, RMSE=RMSE, MAE=MAE, MAPE=MAPE)
+```
+
+**ANSWER:** Naïve repeats the last month. It’s a baseline and ignores seasonality.
+
+
+
+# Q6. Simple moving averages (3, 6, 9)
+
+```{r}
+sma3 <- stats::filter(y_ts, rep(1/3,3), sides=2)
+sma6 <- stats::filter(y_ts, rep(1/6,6), sides=2)
+sma9 <- stats::filter(y_ts, rep(1/9,9), sides=2)
+
+plot(y_ts, xlab="Time", ylab="Index", main="Simple Moving Averages")
+lines(sma3, col="red"); lines(sma6, col="blue"); lines(sma9, col="green")
+```
+
+**ANSWER:** Bigger windows look smoother, but react slower.
+
+
+# Q7. Simple Exponential Smoothing (SES)
+
+```{r}
+ses_fit <- HoltWinters(y_ts, beta=FALSE, gamma=FALSE)
+ses_fc  <- predict(ses_fit, n.ahead=12)
+
+plot(ses_fit); lines(ts(ses_fc, start=end(y_ts)+c(0,1), frequency=12), col="blue")
+title("SES 12-Month Forecast")
+```
+
+
+```{r}
+# Residuals and sigma the simple way: align with ts.intersect
+z_ses <- ts.intersect(y_ts, ses_fit$fitted[,1])
+ses_res <- as.numeric(z_ses[,1] - z_ses[,2])
+ses_res <- ses_res[is.finite(ses_res)]
+sigma_ses <- if (length(ses_res)>=2) sd(ses_res) else NA
+data.frame(alpha=ses_fit$alpha, sigma=sigma_ses)
+```
+
+```{r}
+if (length(ses_res) >= 2) {
+
+  plot(ses_res, type="l", xlab="Index", ylab="Residual", main="SES Residuals")
+  acf(ses_res, na.action=na.pass, main="ACF (SES Residuals)")
+ 
+} else {
+  cat("Not enough SES residuals to plot.\n")
+}
+```
+
+**Answer:**alpha is reasonably high → the model reacts quickly to recent changes.
+SES captures the overall level but not the monthly seasonality.
+residual plots may still show seasonality/autocorrelation, meaning more structure remains.
+
+
+
+
+# Q8. Holt–Winters (additive seasonality)
+
+```{r}
+hw_fit <- HoltWinters(y_ts, seasonal="additive")
+hw_fc  <- predict(hw_fit, n.ahead=12)
+
+plot(hw_fit); lines(ts(hw_fc, start=end(y_ts)+c(0,1), frequency=12), col="blue")
+title("Holt-Winters (Additive) 12-Month Forecast")
+```
+
+```{r}
+# Residuals and sigma the simple way
+z_hw <- ts.intersect(y_ts, hw_fit$fitted[,1])
+hw_res <- as.numeric(z_hw[,1] - z_hw[,2])
+hw_res <- hw_res[is.finite(hw_res)]
+sigma_hw <- if (length(hw_res)>=2) sd(hw_res) else NA
+
+data.frame(alpha=hw_fit$alpha, beta=hw_fit$beta, gamma=hw_fit$gamma, sigma=sigma_hw)
+```
+
+```{r}
+if (length(hw_res) >= 2) {
+  
+  plot(hw_res, type="l", xlab="Index", ylab="Residual", main="HW Residuals")
+  acf(hw_res, na.action=na.pass, main="ACF (HW Residuals)")
+  
+} else {
+  cat("Not enough HW residuals to plot.\n")
+}
+```
+
+**ANSWER:** fits level and seasonality together; forecasts follow the yearly pattern.
+seasonality is stable month-to-month, so additive is appropriate here.
+residuals are smaller and less patterned than SES/naïve.
+
+
+
+# Q9. Accuracy (compare the three) 
+**USED CHATGPT**
+
+```{r}
+
+# Naïve accuracy already computed above
+naive_ME   <- ME
+naive_RMSE <- RMSE
+naive_MAE  <- MAE
+naive_MAPE <- MAPE
+
+# SES accuracy
+z_ses_acc <- ts.intersect(y_ts, ses_fit$fitted[,1])
+a_ses <- as.numeric(z_ses_acc[,1]); f_ses <- as.numeric(z_ses_acc[,2]); e_ses <- a_ses - f_ses
+ses_ME   <- mean(e_ses)
+ses_RMSE <- sqrt(mean(e_ses^2))
+ses_MAE  <- mean(abs(e_ses))
+okp_ses  <- a_ses != 0
+ses_MAPE <- if (any(okp_ses)) mean(100*abs(e_ses[okp_ses])/abs(a_ses[okp_ses])) else NA
+
+# HW accuracy
+z_hw_acc <- ts.intersect(y_ts, hw_fit$fitted[,1])
+a_hw <- as.numeric(z_hw_acc[,1]); f_hw <- as.numeric(z_hw_acc[,2]); e_hw <- a_hw - f_hw
+hw_ME   <- mean(e_hw)
+hw_RMSE <- sqrt(mean(e_hw^2))
+hw_MAE  <- mean(abs(e_hw))
+okp_hw  <- a_hw != 0
+hw_MAPE <- if (any(okp_hw)) mean(100*abs(e_hw[okp_hw])/abs(a_hw[okp_hw])) else NA
+
+acc_table <- data.frame(
+  Model = c("Naive","SES","HW"),
+  ME    = c(naive_ME, ses_ME, hw_ME),
+  RMSE  = c(naive_RMSE, ses_RMSE, hw_RMSE),
+  MAE   = c(naive_MAE, ses_MAE, hw_MAE),
+  MAPE  = c(naive_MAPE, ses_MAPE, hw_MAPE)
+)
+acc_table
+```
+
+```{r}
+best_idx <- which.min(ifelse(is.na(acc_table$RMSE), Inf, acc_table$RMSE))
+data.frame(Best_By_RMSE = acc_table$Model[best_idx])
+```
+
+**ANSWER:** The smallest RMSE is the winner. For seasonal monthly data, HW usually wins.
+
+
+
+# Q10. Final takeaways:
+
+- The data repeats a **yearly cycle** (seasonality).  
+- **Naïve** is a quick baseline.  
+- **SES** follows the level.  
+- **Holt–Winters (additive)** follows the level **and** the seasonal pattern.  
+- Forecast: expect the same seasonal ups and downs unless something unusual happens.
