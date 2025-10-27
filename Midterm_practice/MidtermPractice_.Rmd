@@ -41,7 +41,7 @@ plot(y_ts, xlab="Time", ylab="Index", main="Transit Ridership (Monthly)")
 
 
 
-# Q3. Center and spread (just the basics)
+# Q3. Center and spread 
 
 ```{r}
 min_y <- min(y_ts, na.rm=TRUE)
@@ -110,7 +110,7 @@ lines(naive_fc, col="blue")
 ```
 
 ```{r}
-# Simple accuracy (no custom function)
+# Simple accuracy
 ok <- !is.na(naive_fitted)
 e  <- y_ts[ok] - naive_fitted[ok]
 ME   <- mean(e)
@@ -188,7 +188,6 @@ title("Holt-Winters (Additive) 12-Month Forecast")
 ```
 
 ```{r}
-# Residuals and sigma the simple way
 z_hw <- ts.intersect(y_ts, hw_fit$fitted[,1])
 hw_res <- as.numeric(z_hw[,1] - z_hw[,2])
 hw_res <- hw_res[is.finite(hw_res)]
