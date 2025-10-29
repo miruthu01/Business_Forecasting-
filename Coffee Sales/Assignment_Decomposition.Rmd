@@ -1,0 +1,92 @@
+---
+title: "Midterm – Coffee Sales Forecast"
+author: "Miruthula Vaishnavy S"
+output: html_document
+---
+
+
+
+```{r}
+library(forecast)
+library(fpp2)
+```
+
+```{r}
+
+dat <- read.csv("Coffe_sales-2.csv")
+dat$Date <- as.Date(dat$Date)
+
+
+daily <- aggregate(money ~ Date, data = dat, FUN = sum)
+daily <- daily[order(daily$Date), ]
+
+all_days <- data.frame(Date = seq(min(daily$Date), max(daily$Date), by = "day"))
+daily <- merge(all_days, daily, by = "Date", all.x = TRUE)
+daily$money[is.na(daily$money)] <- 0
+
+
+ym <- paste(format(daily$Date, "%Y"), format(daily$Date, "%m"), sep = "-")
+monthly <- aggregate(daily$money, by = list(ym = ym), FUN = sum)
+monthly <- monthly[order(monthly$ym), ]
+
+start_year <- as.numeric(substr(monthly$ym[1], 1, 4))
+start_mon  <- as.numeric(substr(monthly$ym[1], 6, 7))
+y <- ts(monthly$x, frequency = 12, start = c(start_year, start_mon))
+
+
+head(y)
+```
+
+
+
+### Decomposition – Seasonal pattern, seasonal indices, and seasonally adjusted
+
+```{r}
+     
+## 4) Decomposition 
+m <- frequency(y)           
+if (length(y) >= 2 * m) {      
+  dc <- decompose(y, type = "additive") 
+  plot(dc)
+
+
+  seasadj_series <- y - dc$seasonal
+
+  # Actual vs seasonally adjusted
+  plot(y, main = "Actual vs Seasonally Adjusted", ylab = "Sales", xlab = "Time")
+  lines(seasadj_series, col = "red", lwd = 2)
+
+} else {
+ 
+  plot(y, main = "Series", ylab = "Sales", xlab = "Time")
+}
+
+
+```
+
+```{r}
+
+m <- frequency(y)  
+if (length(y) >= 2 * m) {
+  dc <- decompose(y, type = "additive") 
+  seasadj_series <- y - dc$seasonal
+} else {
+ 
+  seasadj_series <- NULL
+}
+
+
+plot(y, main = "Monthly Sales", xlab = "Time", ylab = "Sales")
+
+
+if (!is.null(seasadj_series)) {
+  lines(seasadj_series, col = "green", lwd = 2)
+}
+```
+
+**Answer:**  
+Seasonality is strong and regular. The seasonally adjusted series removes the repeating pattern and reveals the underlying level/trend more clearly.
+
+
+
+```
