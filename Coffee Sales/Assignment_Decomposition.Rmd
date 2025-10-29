@@ -1,5 +1,5 @@
 ---
-title: "Midterm – Coffee Sales Forecast"
+title: "Decompostion-Coffee Sales Forecast"
 author: "Miruthula Vaishnavy S"
 output: html_document
 ---
