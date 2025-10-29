@@ -84,7 +84,7 @@ if (!is.null(seasadj_series)) {
 }
 ```
 
-**Answer:**  
+**Observation**  
 Seasonality is strong and regular. The seasonally adjusted series removes the repeating pattern and reveals the underlying level/trend more clearly.
 
 
