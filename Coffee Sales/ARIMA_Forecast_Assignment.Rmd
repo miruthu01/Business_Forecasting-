@@ -1,0 +1,61 @@
+---
+title: "ARIMA Forecasting on Coffee Sales"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(forecast)
+library(tseries)
+library(ffp)
+```
+
+
+
+```{r}
+dat <- read.csv("Coffe_sales.csv")
+dat$Date <- as.Date(dat$Date)   
+
+
+daily <- aggregate(money ~ Date, data = dat, FUN = sum)
+
+
+y <- ts(daily$money, frequency = 7)
+```
+
+## 1. Fit ARIMA Model & Explain Output
+
+```{r}
+fit_arima <- auto.arima(y)
+summary(fit_arima)
+```
+
+**Explanation:**
+
+The ARIMA(2,0,2) model captures the short-term dynamics in my coffee sales data without needing difference. The second-lag auto regressive term is strong, indicating that sales from two days ago significantly influence today’s sales. 
+All information criteria (AIC, AICc, BIC) support this model as a good fit. Residuals show no autocorrelation, and MASE < 1 confirms that the model performs better than a naïve benchmark. Overall, the ARIMA model is appropriate and provides reliable forecasts for my dataset.
+
+## 2. Residual Analysis
+
+```{r}
+res_arima <- residuals(fit_arima)
+res_arima <- na.omit(res_arima)
+
+
+plot(res_arima, main="Residuals (ARIMA)")
+hist(res_arima, main="Histogram (ARIMA Residuals)")
+acf(res_arima, main="ACF (ARIMA Residuals)")
+```
+
+## 3. Forecast Next 5 Periods
+
+```{r}
+arima_forecast <- forecast(fit_arima, h=5)
+arima_forecast
+plot(arima_forecast, main="ARIMA Forecast for Next 5 Periods")
+```
+
+## 4. Accuracy of ARIMA Model
+
+```{r}
+accuracy(fit_arima)
+```
